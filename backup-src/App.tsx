@@ -1,4 +1,5 @@
 /* global google */
+import React from "react";
 import {
   Box,
   Button,
@@ -25,20 +26,20 @@ const center = { lat: 25.605028755206394, lng: 85.07451919725354 };
 
 function App() {
   const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY,
+    googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY as string,
     libraries: ["places"],
   });
 
-  const [map, setMap] = useState(null);
-  const [directionsResponse, setDirectionsResponse] = useState(null);
-  const [distance, setDistance] = useState("");
-  const [duration, setDuration] = useState("");
-  const [originMarker, setOriginMarker] = useState(null);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult | null>(null);
+  const [distance, setDistance] = useState<string>("");
+  const [duration, setDuration] = useState<string>("");
+  const [originMarker, setOriginMarker] = useState<google.maps.LatLngLiteral | null>(null);
 
-  const originRef = useRef();
-  const destiantionRef = useRef();
+  const originRef = useRef<HTMLInputElement>(null);
+  const destiantionRef = useRef<HTMLInputElement>(null);
 
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
 
   useEffect(() => {
     function handleResize() {
@@ -56,26 +57,31 @@ function App() {
   if (!isLoaded) return <SkeletonText />;
 
   async function calculateRoute() {
-    if (originRef.current.value === "" || destiantionRef.current.value === "") {
-      return;
-    }
+    if (!originRef.current?.value || !destiantionRef.current?.value) return;
+
     const directionsService = new google.maps.DirectionsService();
+
     const results = await directionsService.route({
       origin: originRef.current.value,
       destination: destiantionRef.current.value,
       travelMode: google.maps.TravelMode.DRIVING,
     });
+
     setDirectionsResponse(results);
-    setDistance(results.routes[0].legs[0].distance.text);
-    setDuration(results.routes[0].legs[0].duration.text);
+
+    const route = results.routes[0];
+    const leg = route.legs[0];
+
+    setDistance(leg.distance?.text || "");
+    setDuration(leg.duration?.text || "");
   }
 
   function clearRoute() {
     setDirectionsResponse(null);
     setDistance("");
     setDuration("");
-    originRef.current.value = "";
-    destiantionRef.current.value = "";
+    if (originRef.current) originRef.current.value = "";
+    if (destiantionRef.current) destiantionRef.current.value = "";
   }
 
   function getCurrentLocation() {
@@ -86,21 +92,14 @@ function App() {
 
         const geocoder = new window.google.maps.Geocoder();
         geocoder.geocode({ location: latlng }, (results, status) => {
-          if (status === "OK") {
-            if (results[0]) {
-              originRef.current.value = results[0].formatted_address;
-              // Smooth pan + zoom trick
-              map.panTo(latlng);
-              map.setZoom(8); // zoom out first
-              setTimeout(() => {
-                map.setZoom(15); // zoom in after a short delay
-              }, 300);
-              setOriginMarker(latlng); // <-- Set marker position
-            } else {
-              alert("No address found for this location.");
-            }
+          if (status === "OK" && results && results[0]) {
+            if (originRef.current) originRef.current.value = results[0].formatted_address;
+            map?.panTo(latlng);
+            map?.setZoom(8);
+            setTimeout(() => map?.setZoom(15), 300);
+            setOriginMarker(latlng);
           } else {
-            alert("Geocoder failed due to: " + status);
+            alert("No address found for this location.");
           }
         });
       });
@@ -128,7 +127,7 @@ function App() {
             mapTypeControl: false,
             fullscreenControl: true,
           }}
-          onLoad={(map) => setMap(map)}
+          onLoad={(mapInstance) => setMap(mapInstance)}
         >
           <Marker position={center} />
           {originMarker && <Marker position={originMarker} label="A" />}
@@ -148,66 +147,68 @@ function App() {
         zIndex="1"
       >
         <Collapse in={!isCollapsed} animateOpacity>
-          <Stack
-            spacing={2}
-            direction={{ base: "column", md: "row" }}
-            justifyContent="space-between"
-          >
-            <Box flexGrow={1}>
-              <Autocomplete>
-                <Input
-                  type="text"
-                  placeholder="Origin"
-                  ref={originRef}
-                  size="xs"
-                />
-              </Autocomplete>
-            </Box>
-            <Box flexGrow={1}>
-              <Autocomplete>
-                <Input
-                  type="text"
-                  placeholder="Destination"
-                  ref={destiantionRef}
-                  size="xs"
-                />
-              </Autocomplete>
-            </Box>
-
-            <ButtonGroup
-              flexWrap="wrap"
-              display="flex"
-              justifyContent={{ base: "center", md: "flex-start" }}
+          <Box>
+            <Stack
+              spacing={2}
+              direction={{ base: "column", md: "row" }}
+              justifyContent="space-between"
             >
-              <Button
-                colorScheme="pink"
-                type="submit"
-                onClick={calculateRoute}
-                size="xs"
-              >
-                Start
-              </Button>
-              <IconButton
-                aria-label="Clear"
-                icon={<FaTimes />}
-                onClick={clearRoute}
-                size="xs"
-              />
-              <Button onClick={getCurrentLocation} colorScheme="blue" size="xs">
-                Use My Location
-              </Button>
-            </ButtonGroup>
-          </Stack>
+              <Box flexGrow={1}>
+                <Autocomplete>
+                  <Input
+                    type="text"
+                    placeholder="Origin"
+                    ref={originRef}
+                    size="xs"
+                  />
+                </Autocomplete>
+              </Box>
+              <Box flexGrow={1}>
+                <Autocomplete>
+                  <Input
+                    type="text"
+                    placeholder="Destination"
+                    ref={destiantionRef}
+                    size="xs"
+                  />
+                </Autocomplete>
+              </Box>
 
-          <Button
-            size="sm"
-            mt={2}
-            onClick={() => setIsCollapsed(true)}
-            colorScheme="gray"
-            w="100%"
-          >
-            Collapse Route Inputs
-          </Button>
+              <ButtonGroup
+                flexWrap="wrap"
+                display="flex"
+                justifyContent={{ base: "center", md: "flex-start" }}
+              >
+                <Button
+                  colorScheme="pink"
+                  type="submit"
+                  onClick={calculateRoute}
+                  size="xs"
+                >
+                  Start
+                </Button>
+                <IconButton
+                  aria-label="Clear"
+                  icon={<FaTimes />}
+                  onClick={clearRoute}
+                  size="xs"
+                />
+                <Button onClick={getCurrentLocation} colorScheme="blue" size="xs">
+                  Use My Location
+                </Button>
+              </ButtonGroup>
+            </Stack>
+
+            <Button
+              size="sm"
+              mt={2}
+              onClick={() => setIsCollapsed(true)}
+              colorScheme="gray"
+              w="100%"
+            >
+              Collapse Route Inputs
+            </Button>
+          </Box>
         </Collapse>
 
         {isCollapsed && (
@@ -229,15 +230,15 @@ function App() {
           alignItems={{ base: "flex-start", md: "center" }}
           mt={4}
         >
-          <Text fontSize="sm">Distance: {distance} </Text>
-          <Text fontSize="sm">Duration: {duration} </Text>
+          <Text fontSize="sm">Distance: {distance}</Text>
+          <Text fontSize="sm">Duration: {duration}</Text>
           <IconButton
             aria-label="Recenter"
             icon={<FaLocationArrow />}
             isRound
             onClick={() => {
-              map.panTo(center);
-              map.setZoom(15);
+              map?.panTo(center);
+              map?.setZoom(15);
             }}
             size="sm"
           />
